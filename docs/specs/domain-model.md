@@ -185,7 +185,7 @@ Which **category of capability** an artifact is. `Kind` selects the [layout conv
 | `Agent` | `agent` | A single-file agent definition. |
 | `Plugin` | `plugin` | A directory package marked by a root `plugin.json`, in the [Agent Plugins](https://agent-plugins.org/) format. |
 
-Every input surface that selects a `Kind` defaults an omitted value to `skill`. Each surface spec owns that default ([sync CLI](atb-sync.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)). The models carry no defaults.
+The flag surfaces default an omitted `Kind` to `skill`. The YAML schema requires `kind`. Each surface spec owns that rule ([sync CLI](atb-sync.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)). The models carry no defaults.
 
 ## `Tool`
 
@@ -210,7 +210,7 @@ One sync work order: one `Kind` under one `root`, written to one or more `Target
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `kind` | [`Kind`](#kind) | yes | The one category this work order distributes. Both surfaces default an omitted kind to `skill`. |
+| `kind` | [`Kind`](#kind) | yes | The one category this work order distributes. The flag path defaults an omitted kind to `skill`. The YAML path requires `kind`. |
 | `root` | `Path` | yes | Tree that discovery walks. From `--src`, or YAML `source`. |
 | `targets` | `List<`[`Target`](#target)`>` | yes | Where to write. **Non-empty** — see [Invariants](#invariants-1). |
 

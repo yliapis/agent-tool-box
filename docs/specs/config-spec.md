@@ -4,7 +4,7 @@ YAML schema for `--config`. This surface builds a [Distribution](domain-model.md
 
 ## Schema
 
-One `kind` per Distribution (default `skill`).
+One `kind` per Distribution. `kind` is required.
 
 ```yaml
 kind: skill
@@ -16,13 +16,11 @@ targets:
     output: ~/.claude/skills
 ```
 
-`kind` is optional in YAML and defaults to `skill`. `kinds:` is an unknown field and is an error (`deny_unknown_fields`). No `version`, `defaults`, `kinds`, `merge`. Tilde expansion on `source` and `output`: a manual `~/` prefix swap using `std::env::home_dir()` (un-deprecated since Rust 1.87). No `shellexpand` dep.
-
 YAML `source` becomes `Distribution.root`. Targets are keyed by `Tool` name (`claude`, `cursor`, `codex`, `opencode`). That is how `Target.tool` gets `Some(...)`. The flag path leaves it `None`.
 
 ## Validation
 
-**Every problem is an error**, not a warning: unknown YAML fields (`deny_unknown_fields`), a typo'd target key (anything not a `Tool` variant name), and an empty or missing `targets:`.
+**Every problem is an error**, not a warning: unknown YAML fields (`deny_unknown_fields`), a missing `kind:`, a typo'd target key (anything not a `Tool` variant name), and an empty or missing `targets:`.
 
 ## Types
 
@@ -35,7 +33,7 @@ YAML `source` becomes `Distribution.root`. Targets are keyed by `Tool` name (`cl
 
 ## Tests
 
-One parse test for the YAML above; one parse test that omitted `kind:` defaults to `skill`. Error-path: an unknown config field fails.
+One parse test for the YAML above. Error-path: an omitted `kind:` fails; an unknown config field fails.
 
 ## Out of scope
 
