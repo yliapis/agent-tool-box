@@ -1,5 +1,5 @@
 # Makefile — thin convenience wrapper so `make help` (default), `make build`,
-# `make run`, and `make install` work without the cargo / atb flag set.
+# `make run`, `make bin`, and `make install` work without the cargo / atb flag set.
 #
 # Cargo builds the `atb` binary from src/main.rs.
 
@@ -14,8 +14,9 @@ endif
 CARGO ?= cargo
 ATB ?= $(CARGO) run --quiet --bin atb --
 ARGS ?= --help
+BINDIR ?= bin
 
-.PHONY: help build run install
+.PHONY: help build run bin install
 
 help: ## Print Makefile targets
 	@printf 'Usage: make [TARGET] [VAR=value]\n\nTargets:\n'
@@ -24,12 +25,19 @@ help: ## Print Makefile targets
 	      $(MAKEFILE_LIST)
 	@printf '\nVariables:\n'
 	@printf '  ARGS      extra argv for `make run` (default: --help)\n'
+	@printf '  BINDIR    where `make bin` puts atb (default: bin)\n'
 
 build: ## Build the atb binary (debug)
 	@$(CARGO) build --bin atb
 
 run: ## Run atb (ARGS='sync --help'; default ARGS is --help)
 	@$(ATB) $(ARGS)
+
+bin: ## Build a release atb into ./bin (override with BINDIR)
+	@$(CARGO) build --release --bin atb
+	@mkdir -p $(BINDIR)
+	@cp target/release/atb $(BINDIR)/atb
+	@printf 'built %s/atb\n' '$(BINDIR)'
 
 install: ## Install atb onto cargo's bin dir
 	@$(CARGO) install --path . --force
