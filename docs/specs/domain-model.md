@@ -2,27 +2,29 @@
 
 An **artifact** is a skill, a command, an agent, or a plugin. You author it once in a source tree. Then you distribute it to the Tools that read it (Claude, Cursor, Codex, OpenCode).
 
-This file is the source of truth for those nouns. The verb specs ([`atb sync`](atb-sync.md), [`atb sync --config`](config-spec.md), [`atb scaffold`](atb-scaffold.md)) bind the same types in Rust. A second binding (a JSON schema, another language) must agree with this file.
+This file is the source of truth for those nouns. The verb specs ([`atb sync`](atb-sync.md), [`atb sync --config`](config-spec.md), [`atb discover`](atb-discover.md), [`atb scaffold`](atb-scaffold.md)) bind the same types in Rust. A second binding (a JSON schema, another language) must agree with this file.
 
 ## Core and support
 
 | Role | What | Why |
 |---|---|---|
-| **Core** | Artifact identity, the [layout convention](#layout-convention), the [round-trip law](#the-round-trip-law) | Scaffold and sync agree on what an artifact is on disk. |
-| **Support** | [Distribution](#distribution) (sync), authoring ([scaffold](atb-scaffold.md)) | Necessary work around the core. |
+| **Core** | Artifact identity, the [layout convention](#layout-convention), the [round-trip law](#the-round-trip-law) | Scaffold, discover, and sync agree on what an artifact is on disk. |
+| **Support** | [Distribution](#distribution) (sync), listing ([discover](atb-discover.md)), authoring ([scaffold](atb-scaffold.md)) | Necessary work around the core. |
 | **Generic** | Filesystem copy, YAML parse, CLI parse | Use existing crates. Do not model them here. |
 
 ## Contexts
 
-**Scaffold** and **Sync** are separate. They do not share objects at run time. They share the [layout convention](#layout-convention) on disk. That contract is the [round-trip law](#the-round-trip-law). Domain events are not part of v1.
+**Scaffold** and **Sync** are separate. They do not share objects at run time. They share the [layout convention](#layout-convention) on disk. That contract is the [round-trip law](#the-round-trip-law). **Discover** is that lookup as a command: the same `discover()` Sync already runs, then a print. Domain events are not part of v1.
 
 ```mermaid
 flowchart LR
   yaml[YAML config] --> dist[Distribution]
   flags[sync flags] --> dist
   dist --> discover
+  dflags[discover flags] --> discover
   discover --> catalog[Catalog]
   catalog --> plan
+  catalog --> listing[pretty list]
   sflags[scaffold flags] --> spec[ScaffoldSpec]
   spec --> scaffold
   scaffold --> disk[layout on disk]
@@ -35,6 +37,7 @@ Each input surface builds a domain value. The surface shape stops at that step.
 |---|---|---|
 | Sync flags (`--src`, `--dst`, `--kind`) | [Distribution](#distribution) | One Target. `tool` is empty in v1. |
 | YAML config (`--config`) | [Distribution](#distribution) | Each target key is a Tool. See [config-spec](config-spec.md). |
+| Discover flags (`--src`, `--kind`) | [Catalog](#catalog) | Read-only. No Target. Same `discover()` as sync. |
 | Scaffold flags | `ScaffoldSpec` | Command input, not a domain noun. |
 | Tool directories | files on disk | v1 uses one copy layout for every Tool. |
 
@@ -50,7 +53,7 @@ One owner per fact.
 
 - **Domain facts** — fields, types, optionality, invariants, and the [layout convention](#layout-convention) — are normative **here**. Rust blocks in the verb specs are bindings. If a binding disagrees with a model, the binding is the bug.
 - **Behavior facts** — what the pipelines do, validation order, error handling, the CLI grammar — are normative in the **verb specs**.
-- **Surface defaults** — what an omitted flag or YAML field means — belong to the spec that owns that surface ([sync CLI](atb-sync.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)).
+- **Surface defaults** — what an omitted flag or YAML field means — belong to the spec that owns that surface ([sync CLI](atb-sync.md#cli), [discover CLI](atb-discover.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)).
 
 When a field changes, it changes here first. Then the bindings follow.
 
@@ -136,11 +139,13 @@ classDiagram
 
 Sync reads a Distribution, builds a Catalog, and writes each Artifact under each Target output ([`atb sync`](atb-sync.md)).
 
+Discover builds that Catalog and prints it ([`atb discover`](atb-discover.md)).
+
 Scaffold writes a new skeleton into the tree so that a later `discover` call reads it back as an Artifact ([`atb scaffold`](atb-scaffold.md), [round-trip law](#the-round-trip-law)).
 
 ## `Catalog`
 
-The artifacts of one Kind under one root. This is the consistency boundary for identity. `discover(root, kind)` returns a Catalog. See [atb-sync](atb-sync.md#discovery).
+The artifacts of one Kind under one root. This is the consistency boundary for identity. `discover(root, kind)` returns a Catalog. See [atb-sync](atb-sync.md#discovery) and [atb-discover](atb-discover.md).
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -185,7 +190,7 @@ Which **category of capability** an artifact is. `Kind` selects the [layout conv
 | `Agent` | `agent` | A single-file agent definition. |
 | `Plugin` | `plugin` | A directory package marked by a root `plugin.json`, in the [Agent Plugins](https://agent-plugins.org/) format. |
 
-The flag surfaces default an omitted `Kind` to `skill`. The YAML schema requires `kind`. Each surface spec owns that rule ([sync CLI](atb-sync.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)). The models carry no defaults.
+The flag surfaces default an omitted `Kind` to `skill`. The YAML schema requires `kind`. Each surface spec owns that rule ([sync CLI](atb-sync.md#cli), [discover CLI](atb-discover.md#cli), [YAML schema](config-spec.md#schema), [scaffold CLI](atb-scaffold.md#cli)). The models carry no defaults.
 
 ## `Tool`
 
@@ -243,7 +248,7 @@ How each [`Kind`](#kind) meets the filesystem. This is a **static rule**, not a 
 
 The two `id` rows agree by construction. Scaffold of `name` at the scaffold path, then discover, yields the `id` the name row predicts. That agreement is the mechanical core of the [round-trip law](#the-round-trip-law).
 
-Behavior around the convention belongs to the verb specs: symlink following, walk-error classification, the nested-`SKILL.md` error, a file at `commands/foo/bar.md`, how a skill or plugin directory is copied ([discovery](atb-sync.md#discovery), [copy semantics](atb-sync.md#copy-semantics), [templates](atb-scaffold.md#layout-and-templates)).
+Behavior around the convention belongs to the verb specs: symlink following, walk-error classification, the nested-`SKILL.md` error, a file at `commands/foo/bar.md`, how a skill or plugin directory is copied, how a Catalog is printed ([discovery](atb-sync.md#discovery), [listing](atb-discover.md#print), [copy semantics](atb-sync.md#copy-semantics), [templates](atb-scaffold.md#layout-and-templates)).
 
 ## The round-trip law
 
@@ -265,9 +270,10 @@ These names appear in the verb specs and in the binding. They are mechanics or c
 
 | Name | What it is | Defined in |
 |---|---|---|
-| `Metadata` / `ArtifactMeta` | Name and description from frontmatter. Not a domain noun. Sync copies files. It does not read these fields to decide dest paths. | [atb-sync](atb-sync.md#rust-api) frontmatter reader; [atb-scaffold](atb-scaffold.md#layout-and-templates) |
+| `Metadata` / `ArtifactMeta` | Name and description from frontmatter. Not a domain noun. Sync copies files. It does not read these fields to decide dest paths. Discover prints them. | [atb-sync](atb-sync.md#rust-api) frontmatter reader; [atb-discover](atb-discover.md#print); [atb-scaffold](atb-scaffold.md#layout-and-templates) |
 | `FileOp` | A filesystem operation (`Copy { from, to }`). The mechanism distribution runs. | [atb-sync](atb-sync.md#rust-api), postcondition in [Apply](atb-sync.md#apply) |
 | `SyncPlan` | An execution plan: the `FileOp`s for one `Target`, printed before they run. Derived from a Catalog and a Target. | [atb-sync](atb-sync.md#rust-api) |
 | `ScaffoldSpec` | The input record of `scaffold`. The stem rule on `name` is an [`Artifact` identity](#identity) invariant. | [atb-scaffold](atb-scaffold.md#rust-api) |
 | `Adapter` / `CopyAdapter` | A strategy that turns Artifacts plus a Target into `FileOp`s. It produces data. It is not data. | [atb-sync](atb-sync.md#rust-api) |
-| `discover` / `plan` / `apply` / `scaffold` | The pipeline functions. `discover` is the Catalog lookup. `scaffold` is the Artifact factory. | [atb-sync](atb-sync.md#rust-api), [atb-scaffold](atb-scaffold.md#rust-api) |
+| `format_catalog` | Pretty text of a Catalog. Presentation, not a domain noun. | [atb-discover](atb-discover.md#rust-api) |
+| `discover` / `plan` / `apply` / `scaffold` | The pipeline functions. `discover` is the Catalog lookup. `scaffold` is the Artifact factory. | [atb-sync](atb-sync.md#rust-api), [atb-discover](atb-discover.md#rust-api), [atb-scaffold](atb-scaffold.md#rust-api) |

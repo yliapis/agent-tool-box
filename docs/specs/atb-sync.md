@@ -34,7 +34,7 @@ flowchart LR
 
 ## Discovery
 
-Discovery walks `root` by `Kind`. That walk matches the tree under `~/src/dotfiles/ai-coding/plugins/*/{skills,commands,agents}/…`. The root is `ai-coding` or `ai-coding/plugins`. The root is not `ai-coding/skills`.
+Discovery walks `root` by `Kind`. That walk matches the tree under `~/src/dotfiles/ai-coding/plugins/*/{skills,commands,agents}/…`. The root is `ai-coding` or `ai-coding/plugins`. The root is not `ai-coding/skills`. [`atb discover`](atb-discover.md) is the listing surface over the same walk.
 
 What each `Kind` matches, and the `id` / `source` it yields, are the marker, referent, and id rows of the [layout convention](domain-model.md#layout-convention).
 
