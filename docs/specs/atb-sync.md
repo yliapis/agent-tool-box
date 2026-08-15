@@ -34,11 +34,9 @@ flowchart LR
 
 Walks `src` by `Kind`. That matches the real tree under `~/src/dotfiles/ai-coding/plugins/*/{skills,commands,agents}/…`. The search root should be `ai-coding` (or `ai-coding/plugins`), not `ai-coding/skills`.
 
-| `Kind` | Match under `src` | `id` | `source` |
-|---|---|---|---|
-| `Skill` | `**/skills/*/SKILL.md` | parent directory name | that directory |
-| `Command` | `**/commands/*.md` (direct children) | filename (`critique.md`) | that file |
-| `Agent` | `**/agents/*.md` (direct children) | filename | that file |
+What each `Kind` matches, and the `id` / `source` it yields, are the marker,
+referent, and id rows of the [layout convention](domain-model.md#layout-convention)
+— discovery implements those rows.
 
 A file in `commands/foo/bar.md` is not a command. Do not error; do not copy it.
 
@@ -51,10 +49,10 @@ A file in `commands/foo/bar.md` is not a command. Do not error; do not copy it.
 
 ## Copy semantics
 
-`CopyAdapter` has two layouts:
-
-- `Skill` — every file under `source` → `{output}/{id}/{relpath}` (same as today, including junk like `.DS_Store`; filters are TODO)
-- `Command` / `Agent` — one `Copy` of `source` → `{output}/{id}`
+`CopyAdapter` expands each artifact by [`Kind`](domain-model.md#kind): every
+file under a skill's `source` to `{output}/{id}/{relpath}` (same as today,
+including junk like `.DS_Store`; filters are TODO), a single `Copy` for a
+command or agent.
 
 Symlinked files are materialized: `fs::copy` follows the link and writes the target's content. Overwrite existing files; never delete — stale files in `dst` are the future `clean`'s problem.
 
@@ -83,7 +81,7 @@ Exactly one of `--config` or the `--src`/`--dst` pair; both flags are required w
 
 ## Rust API
 
-Single crate, `edition = "2024"`. Package `agent-tool-box`, bin name `atb`. `Result` is `anyhow::Result` throughout — no custom error enum in v1.
+Single crate, `edition = "2024"`. Package `agent-tool-box`, bin name `atb`. `Result` is `anyhow::Result` throughout — no custom error enum in v1. `Tool`, `Kind`, `Artifact`, `ArtifactMeta`, `Target`, and `Config` are the Rust binding of the language-agnostic [domain model](domain-model.md); their fields, constraints, and relationships are defined there once for every binding, so the block is deliberately comment-free (see [normativity](domain-model.md#normativity)). `FileOp`, `SyncPlan`, and `Adapter` are mechanics rather than domain nouns and are defined here only ([why](domain-model.md#deliberately-not-modeled)).
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -94,8 +92,8 @@ pub enum Kind { Skill, Command, Agent }
 
 pub struct Artifact {
     pub kind: Kind,
-    pub id: String,        // dest name under output
-    pub source: PathBuf,   // skill dir, or the command/agent file
+    pub id: String,
+    pub source: PathBuf,
     pub meta: ArtifactMeta,
 }
 
@@ -105,12 +103,12 @@ pub struct ArtifactMeta {
 }
 
 pub struct Target {
-    pub tool: Option<Tool>,      // YAML target key when config lands; None on the flag path
-    pub output: PathBuf,         // --dst / targets.<tool>.output
+    pub tool: Option<Tool>,
+    pub output: PathBuf,
 }
 
 pub struct Config {
-    pub kind: Kind,              // default Skill
+    pub kind: Kind,
     pub source: PathBuf,
     pub targets: Vec<Target>,
 }
@@ -133,7 +131,7 @@ pub fn plan(artifacts: &[Artifact], targets: &[Target]) -> Vec<SyncPlan>;
 pub fn apply(plans: &[SyncPlan]) -> Result<()>;
 ```
 
-`CopyAdapter` is the only adapter: `Skill` emits a `Copy` for every file under `source` to `output.join(id).join(relpath)`; `Command` / `Agent` emit one `Copy` of `source` to `output.join(id)`. `plan()` picks `CopyAdapter` for every target; `tool` is unused until an adapter diverges.
+`CopyAdapter` is the only adapter; it emits the ops for each artifact (see [Copy semantics](#copy-semantics)). `plan()` picks `CopyAdapter` for every target; `tool` is unused until an adapter diverges.
 
 Frontmatter: split the primary file (`source.join("SKILL.md")` for `Skill`, `source` itself for Command/Agent) on the first `---` / `---` pair and parse the YAML block; missing or malformed frontmatter is fine — `meta` fields just stay `None`. No extra crate unless that proves painful.
 
