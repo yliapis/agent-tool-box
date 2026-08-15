@@ -9,7 +9,7 @@ atb scaffold --name code-review
 atb scaffold --kind command --name critique --dir ~/src/dotfiles/ai-coding/plugins/core
 ```
 
-The first writes `./skills/code-review/SKILL.md`; the second writes `…/plugins/core/commands/critique.md`, which the next `atb sync` picks up. **Round-trip invariant**: immediately after a successful scaffold, `discover(dir, kind)` succeeds and includes exactly the new artifact, with the `id` and `meta` fields the [round-trip law](models/README.md#the-round-trip-law) states — that statement is canonical, including its collision proviso and the fact that the command template writes no `name:` frontmatter (so a command's `meta.name` stays `None`).
+The first writes `./skills/code-review/SKILL.md`; the second writes `…/plugins/core/commands/critique.md`, which the next `atb sync` picks up. **Round-trip invariant**: immediately after a successful scaffold, `discover(dir, kind)` succeeds and includes exactly the new artifact, with the `id` and `meta` fields the [round-trip law](domain-model.md#the-round-trip-law) states — that statement is canonical, including its collision proviso and the fact that the command template writes no `name:` frontmatter (so a command's `meta.name` stays `None`).
 
 Scaffold never overwrites: an existing destination is an error and nothing is written. `--tool` (default `claude`) selects the template flavor; v1 ships claude templates only, and any other value exits non-zero (see [`--tool`](#--tool)).
 
@@ -17,7 +17,7 @@ Scaffold never overwrites: an existing destination is an error and nothing is wr
 
 The path each `kind` creates, and the `id` it discovers as, are the
 scaffold-path and id-from-`name` rows of the
-[`KindLayout` mapping](models/kind-layout.md#the-mapping); the templates below
+[layout convention](domain-model.md#layout-convention); the templates below
 are the content written at those paths.
 
 Intermediate directories (`skills/`, the skill dir, `commands/`, `agents/`) are created with `create_dir_all`; `{dir}` itself must already exist — a missing `--dir` is more likely a typo than intent.
@@ -64,7 +64,7 @@ The frontmatter must parse under sync's frontmatter reader (first `---` / `---` 
 
 Every problem is an error, and all checks precede the first write — an error writes nothing.
 
-- **name** — `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, at most 64 chars. This is the strictest of the four tools' naming rules (Claude's skill-name constraint), so a scaffolded name is legal everywhere, filesystem-safe, and needs no YAML quoting. The name is the stem; scaffold appends `.md` itself, so `--name critique.md` is invalid, not redundant.
+- **name** — `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, at most 64 chars: the [`Artifact` identity rule](domain-model.md#identity), enforced here because scaffold is where names are born. The name is the stem; scaffold appends `.md` itself, so `--name critique.md` is invalid, not redundant.
 - **dir** — `--dir` (default `.`) must exist and be a directory.
 - **collision** — the artifact path (`{dir}/skills/{name}` for skills; the `.md` file otherwise) must not exist — file or directory, empty or not. Deliberate overwrite is a TODO flag, not a default.
 - **tool** — any value other than `claude` fails, pointing at the per-tool-templates TODO.
@@ -84,7 +84,7 @@ atb scaffold --name <name> [--kind skill|command|agent] [--tool claude|cursor|co
 
 ## Rust API
 
-`ScaffoldSpec` is the Rust binding of the [`ScaffoldSpec` domain model](models/scaffold-spec.md); `Kind` and `Tool` are sync's enums, defined language-agnostically in [enumerations](models/enumerations.md). The block is deliberately comment-free — field semantics live in the models (see [normativity](models/README.md#normativity)); defaults are the [CLI](#cli)'s.
+`ScaffoldSpec` is this command's input record, not a domain noun, so it is defined here and nowhere else ([why](domain-model.md#deliberately-not-modeled)). Its `kind` and `tool` are sync's enums, defined language-agnostically in the [domain model](domain-model.md); `name` carries the [`Artifact` identity rule](domain-model.md#identity). Defaults are the [CLI](#cli)'s.
 
 ```rust
 pub struct ScaffoldSpec {
