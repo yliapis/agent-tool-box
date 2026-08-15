@@ -2,7 +2,7 @@
   "folders": [
     {
       "name": "agent-tool-box",
-      "path": "."
+      "path": "../agent-tool-box"
     },
     {
       "name": "dotfiles",
