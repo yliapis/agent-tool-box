@@ -1,6 +1,6 @@
 # `atb sync` — spec
 
-Normative spec for the first cut of `agent-tool-box`. The public types of the Rust crate are the API. The only binary entry is `atb sync`. Iterate here. [The plan](../plans/bare-bones-atb-sync.md) tracks sequencing only. YAML `--config` is a later feature. Its design lives in [config-spec.md](config-spec.md).
+Normative spec for the first cut of `agent-tool-box`. The public types of the Rust crate are the API. The only binary entry is `atb sync`. Iterate here. YAML `--config` is a later feature. Its design lives in [config-spec.md](config-spec.md).
 
 ## Behavior
 
