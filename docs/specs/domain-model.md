@@ -36,7 +36,6 @@ Each input surface builds a domain value. The surface shape stops at that step.
 | Sync flags (`--src`, `--dst`, `--kind`) | [Distribution](#distribution) | One Target. `tool` is empty in v1. |
 | YAML config (`--config`) | [Distribution](#distribution) | Each target key is a Tool. See [config-spec](config-spec.md). |
 | Scaffold flags | `ScaffoldSpec` | Command input, not a domain noun. |
-| Artifact frontmatter | [Metadata](#metadata) | Missing or bad YAML is not an error. |
 | Tool directories | files on disk | v1 uses one copy layout for every Tool. |
 
 ## Scope
@@ -78,9 +77,8 @@ Records list fields as **Field · Type · Required · Notes**. *Required: no* me
 | Kind | Category of artifact: Skill, Command, or Agent. |
 | Tool | Agent program that reads artifacts: Claude, Cursor, Codex, or OpenCode. |
 | Target | One destination directory, for one Tool. |
-| Metadata | Name and description from frontmatter. |
 | stem | Machine-safe name under the [identity](#identity) rule. Not the same as `id`. |
-| `id` | Destination name under a Target output. Derived from Kind + `source`. |
+| `id` | Destination name under a Target output. Derived from Kind + `source`. Adds no fact beyond those two. |
 | `source` | Path of the artifact content (skill directory, or command/agent file). |
 | `root` | Path of the tree that discovery walks. |
 | config | The YAML file for `--config`. Not the Distribution. |
@@ -103,11 +101,6 @@ classDiagram
     Kind kind
     Text id
     Path source
-    Metadata meta
-  }
-  class Metadata {
-    Text? name
-    Text? description
   }
   class Kind {
     <<enumeration>>
@@ -135,7 +128,6 @@ classDiagram
   Catalog --> Kind
   Catalog *-- Artifact
   Artifact --> Kind
-  Artifact *-- Metadata
   Distribution --> Kind
   Distribution *-- Target
   Target --> Tool
@@ -171,24 +163,15 @@ One capability found in the source tree. This is the entity the tool moves.
 | `kind` | [`Kind`](#kind) | yes | Which category this is. Selects the [layout convention](#layout-convention) column. |
 | `id` | `Text` | yes | Destination name under a Target `output`. **Derived** — see [Identity](#identity). |
 | `source` | `Path` | yes | Where the artifact content lives. The [`source` referent](#layout-convention): the skill directory, or the command/agent file. |
-| `meta` | [`Metadata`](#metadata) | yes | Name and description from frontmatter. The record is always present. Its fields can be empty. |
 
 ### Identity
 
-- **`id` is derived.** `id` is a function of (`kind`, `source`). See the [id-from-`source` rule](#layout-convention). For a skill, `id` is the directory name. For a command or agent, `id` is the filename, including the extension. A binding can store `id`. The field adds no fact beyond `kind` + `source`.
-- **`id` is unique inside a Catalog.** See [Catalog invariants](#invariants).
+`id` is the destination name under a Target `output`. Sync writes a skill to `{output}/{id}/…`. Sync writes a command or agent to `{output}/{id}`.
+
+- **`id` is derived.** `id` is a function of (`kind`, `source`). See the [id-from-`source` rule](#layout-convention). For a skill, `id` is the directory name. For a command or agent, `id` is the filename, including the extension.
+- **`id` adds no fact.** `kind` and `source` already determine `id`. A binding can store the string, or compute it when it writes dest paths or checks collisions. The stored field is a convenience and a candidate for removal. If the field is removed, Catalog uniqueness and dest paths stay. Those rules then name the derived string, not a field on Artifact.
+- **`id` is unique inside a Catalog.** Two artifacts with the same `id` write to the same dest path. That collision is an error. See [Catalog invariants](#invariants).
 - **A stem is machine-safe by construction.** A stem matches `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$` and is at most 64 characters. This is the strictest naming rule of the four Tools. A stem that passes is legal on every Tool and on the filesystem. It needs no YAML quoting. The stem is not the `id`. The layout convention appends `.md` for a command or agent. `critique.md` is an invalid stem and a valid `id`. Scaffold [enforces the stem rule](atb-scaffold.md#validation). Discovery does not re-check ids. A hand-written artifact can carry an id that fails the rule.
-
-### `Metadata`
-
-Name and description from the first `---` / `---` block of the [primary file](#layout-convention) (`SKILL.md` for a skill, the file itself for a command or agent). Value object. The Rust binding names it `ArtifactMeta`.
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name` | `Text?` | no | The `name:` frontmatter value, if present. |
-| `description` | `Text?` | no | The `description:` frontmatter value, if present. |
-
-Both fields are best-effort. **Missing or malformed frontmatter is not an error.** The matching field stays empty. No other frontmatter key is read.
 
 ## `Kind`
 
@@ -253,7 +236,6 @@ How each [`Kind`](#kind) meets the filesystem. This is a **static rule**, not a 
 | **Marker** — what discovery matches | `**/skills/*/SKILL.md` | `**/commands/*.md`, direct children only | `**/agents/*.md`, direct children only |
 | **`source` referent** | the skill directory | the matched file | the matched file |
 | **`id` from `source`** | the directory name | the filename, extension included | the filename, extension included |
-| **Primary file** — where frontmatter is read | `{source}/SKILL.md` | `source` itself | `source` itself |
 | **Scaffold path** — where a new one is written | `{dir}/skills/{name}/SKILL.md` | `{dir}/commands/{name}.md` | `{dir}/agents/{name}.md` |
 | **`id` from `name`** | `{name}` | `{name}.md` | `{name}.md` |
 
@@ -270,8 +252,6 @@ After a successful scaffold of `kind` and stem `name` under `dir`, `discover(dir
 - `a.kind` = the scaffolded `kind`
 - `a.id` = the [id-from-`name` rule](#layout-convention) — `{name}` for `Skill`, `{name}.md` for `Command` / `Agent`
 - `a.source` = the [`source` referent](#layout-convention) of the written path
-- `a.meta.description` populated. If a description is given, that text is used. If not, the per-kind placeholder is used.
-- `a.meta.name` = `name` for the kinds whose template writes `name:` frontmatter (`Skill`, `Agent`). The `Command` template carries only `description:`. A command `meta.name` stays empty.
 
 **Proviso.** The law assumes `name` does not collide with the `id` of a same-`Kind` artifact already elsewhere under `dir`. Scaffold collision check is path-local (the exact destination). Catalog uniqueness spans the whole tree. A same-`id` artifact under a different subtree makes the later `discover` fail with a duplicate-`id` error.
 
@@ -283,6 +263,7 @@ These names appear in the verb specs and in the binding. They are mechanics or c
 
 | Name | What it is | Defined in |
 |---|---|---|
+| `Metadata` / `ArtifactMeta` | Name and description from frontmatter. Not a domain noun. Sync copies files. It does not read these fields to decide dest paths. | [atb-sync](atb-sync.md#rust-api) frontmatter reader; [atb-scaffold](atb-scaffold.md#layout-and-templates) |
 | `FileOp` | A filesystem operation (`Copy { from, to }`). The mechanism distribution runs. | [atb-sync](atb-sync.md#rust-api), postcondition in [Apply](atb-sync.md#apply) |
 | `SyncPlan` | An execution plan: the `FileOp`s for one `Target`, printed before they run. Derived from a Catalog and a Target. | [atb-sync](atb-sync.md#rust-api) |
 | `ScaffoldSpec` | The input record of `scaffold`. The stem rule on `name` is an [`Artifact` identity](#identity) invariant. | [atb-scaffold](atb-scaffold.md#rust-api) |
