@@ -8,7 +8,7 @@ Two equivalent ways to say the same job:
 
 ```
 atb sync --config sync.yaml
-atb sync --tool cursor --src ~/src/dotfiles/ai-coding --dst ~/.agents/skills
+atb sync --src ~/src/dotfiles/ai-coding/skills --dst ~/.agents/skills
 ```
 
 `--config` and the flag trio are two ways to build one `Config`, and they are mutually exclusive (a clap `ArgGroup`). "Flags override config" sounds simple but is ill-defined the moment a config has two targets — which one does `--dst` override? — so v1 refuses the mix instead of defining merge semantics. `sync` always discover → plan → apply (print the plan, then write).
