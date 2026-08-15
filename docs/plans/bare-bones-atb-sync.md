@@ -11,9 +11,9 @@ atb sync --config sync.yaml
 atb sync --tool cursor --src ~/src/dotfiles/ai-coding --dst ~/.agents/skills
 ```
 
-`--config` and the flag trio are two ways to build one `Config`. Flags override matching config fields when both are present. `sync` always discover → plan → apply (print the plan, then write).
+`--config` and the flag trio are two ways to build one `Config`, and they are mutually exclusive (a clap `ArgGroup`). "Flags override config" sounds simple but is ill-defined the moment a config has two targets — which one does `--dst` override? — so v1 refuses the mix instead of defining merge semantics. `sync` always discover → plan → apply (print the plan, then write).
 
-Discovery walks `--src` for `**/SKILL.md`. That matches the real tree under `~/src/dotfiles/ai-coding/plugins/*/skills/<name>/SKILL.md`. A src of `.../ai-coding/skills` will find nothing today; the search root should be `ai-coding` (or `ai-coding/plugins`).
+Discovery walks `--src` for `**/SKILL.md`. That matches the real tree under `~/src/dotfiles/ai-coding/plugins/*/skills/<name>/SKILL.md`. A src of `.../ai-coding/skills` will find nothing today; the search root should be `ai-coding` (or `ai-coding/plugins`). Zero discovered skills is an error, not an empty success — the message should carry that search-root hint. Two skill dirs with the same name (possible across plugins) is also an error: both would land at `{dst}/{slug}/`, and silently letting the last one win hides the collision.
 
 Each skill directory is copied as-is to `{dst}/{slug}/` (`SKILL.md`, `references/`, `LICENSE`, …). All four tools share that layout in v1. `--tool` is recorded on the `Target` so a later adapter can diverge; it does not change the copy today.
 
@@ -63,7 +63,7 @@ flowchart LR
 
 ## Rust types (the API)
 
-Single crate, `edition = "2021"`. Package `agent-tool-box`, bin name `atb`.
+Single crate, `edition = "2024"` (stable since Rust 1.85; nothing here needs 2021). Package `agent-tool-box`, bin name `atb`. `Result` is `anyhow::Result` throughout — no custom error enum in v1.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -121,17 +121,17 @@ targets:
     output: ~/.claude/skills
 ```
 
-Tilde expansion on `source` and `output`. `serde` + `serde_yaml` for load; `clap` derive for the CLI.
+Tilde expansion on `source` and `output`: a manual `~/` prefix swap using `std::env::home_dir()` (un-deprecated since Rust 1.87) — no `shellexpand` dep. `serde` + `serde_yaml_ng` for load (`serde_yaml` is archived/unmaintained; `serde_yaml_ng` is the API-compatible fork); `clap` derive for the CLI.
 
 ## Crate layout
 
-- [Cargo.toml](../../Cargo.toml) — deps: `clap` (derive), `serde`, `serde_yaml`, `walkdir`, `anyhow`. Frontmatter: split on the first `---` / `---` and parse the YAML block; no extra crate unless that proves painful.
+- [Cargo.toml](../../Cargo.toml) — deps: `clap` (derive), `serde`, `serde_yaml_ng`, `walkdir`, `anyhow`. Frontmatter: split on the first `---` / `---` and parse the YAML block; no extra crate unless that proves painful. Missing or malformed frontmatter is fine — `meta` fields just stay `None`.
 - [src/lib.rs](../../src/lib.rs) — re-export the types and the three functions
 - [src/model.rs](../../src/model.rs) — types above
 - [src/config.rs](../../src/config.rs) — YAML + flag merge → `Config`
 - [src/discover.rs](../../src/discover.rs) — `walkdir` for `SKILL.md`; `id` = parent dir name; skip hidden dirs
 - [src/adapter.rs](../../src/adapter.rs) — `Adapter` + `SkillCopy`
-- [src/apply.rs](../../src/apply.rs) — `create_dir_all` + `fs::copy`; overwrite
+- [src/apply.rs](../../src/apply.rs) — `create_dir_all` + `fs::copy`; overwrite existing files, never delete (stale files in `dst` are the future `clean`'s problem)
 - [src/main.rs](../../src/main.rs) — `atb sync` only
 - [README.md](../../README.md) — crate purpose + the two invocations
 
@@ -142,12 +142,12 @@ atb sync --config <path>
 atb sync --tool <claude|cursor|codex|opencode> --src <dir> --dst <dir>
 ```
 
-`--config` may be omitted if the flag trio is complete. Require `--src` and `--dst` when not using `--config`. Print each `Copy` as `from -> to`, then apply. Exit non-zero on missing paths or unknown `--tool`.
+Exactly one of `--config` or the flag trio; all three of `--tool`, `--src`, `--dst` are required when `--config` is absent. Print each `Copy` as `from -> to`, then apply. Exit non-zero on: mixing `--config` with the trio, missing paths, unknown `--tool`, zero skills discovered, or duplicate skill ids.
 
 ## Tests (thin)
 
-Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One config-parse test for the YAML above.
+Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One config-parse test for the YAML above. Two error-path tests: a src with no `SKILL.md` fails with the search-root hint, and duplicate skill ids fail discovery.
 
 ## Out of scope
 
-Per-tool SKILL.md rewriting, `compatibility:` filtering, region markers, MCP/rules/commands, plugin registry, lockfile, dry-run flag, `check` / `import` / `clean`.
+Per-tool SKILL.md rewriting, `compatibility:` filtering, region markers, MCP/rules/commands, plugin registry, lockfile, dry-run flag, flag-over-config merge semantics, deleting stale files from `dst`, `check` / `import` / `clean`.
