@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "agent-tool-box",
+      "path": "."
+    },
+    {
+      "name": "dotfiles",
+      "path": "../dotfiles"
+    }
+  ]
+}
