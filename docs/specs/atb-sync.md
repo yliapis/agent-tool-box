@@ -11,7 +11,7 @@ atb sync --config sync.yaml
 atb sync --src ~/src/dotfiles/ai-coding/skills --dst ~/.agents/skills
 ```
 
-`--config` and the flag trio are two ways to build one `Config`, and they are mutually exclusive (a clap `ArgGroup`). "Flags override config" sounds simple but is ill-defined the moment a config has two targets — which one does `--dst` override? — so v1 refuses the mix instead of defining merge semantics. `sync` always discover → plan → apply (print the plan, then write).
+`--config` and the `--src`/`--dst` pair are two ways to build one `Config`, and they are mutually exclusive (a clap `ArgGroup`). "Flags override config" sounds simple but is ill-defined the moment a config has two targets — which one does `--dst` override? — so v1 refuses the mix instead of defining merge semantics. `sync` always discover → plan → apply (print the plan, then write).
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ Walks `src` for `**/SKILL.md`; each match's parent directory is one skill, `id` 
 
 Each skill directory is copied as-is to `{dst}/{slug}/` — every file (`SKILL.md`, `references/`, `LICENSE`, junk like `.DS_Store` included; filters are TODO). Symlinked files are materialized: `fs::copy` follows the link and writes the target's content. Overwrite existing files; never delete — stale files in `dst` are the future `clean`'s problem.
 
-All four tools share this layout in v1. `--tool` is recorded on the `Target` so a later adapter can diverge; it does not change the copy today.
+All four tools share this layout in v1. The copy does not depend on which tool the dst belongs to; `--tool` is deferred until an adapter actually diverges (see TODO).
 
 ## Apply
 
@@ -73,10 +73,10 @@ Unix only for v1: macOS, Linux, BSDs. Windows is unsupported and `atb` makes no 
 
 ```
 atb sync --config <path>
-atb sync --tool <claude|cursor|codex|opencode> --src <dir> --dst <dir>
+atb sync --src <dir> --dst <dir>
 ```
 
-Exactly one of `--config` or the flag trio; all three of `--tool`, `--src`, `--dst` are required when `--config` is absent. Exit non-zero on: mixing `--config` with the trio, missing paths, unknown `--tool`, invalid config, zero skills discovered, duplicate skill ids, nested `SKILL.md`, or a failed copy.
+Exactly one of `--config` or the `--src`/`--dst` pair; both flags are required when `--config` is absent. Exit non-zero on: mixing `--config` with the pair, missing paths, invalid config, zero skills discovered, duplicate skill ids, nested `SKILL.md`, or a failed copy.
 
 ## Rust API
 
@@ -98,7 +98,7 @@ pub struct ArtifactMeta {
 }
 
 pub struct Target {
-    pub tool: Tool,
+    pub tool: Option<Tool>,      // YAML target key; None on the flag path
     pub output: PathBuf,         // --dst / targets.<tool>.output
 }
 
@@ -125,7 +125,7 @@ pub fn plan(artifacts: &[Artifact], targets: &[Target]) -> Vec<SyncPlan>;
 pub fn apply(plans: &[SyncPlan]) -> Result<()>;
 ```
 
-`SkillCopy` is the only adapter: for each artifact, emit a `Copy` for every file under `source_dir` to `output.join(id).join(relpath)`. `plan()` is a `Tool -> &dyn Adapter` match that currently returns that same adapter for every variant.
+`SkillCopy` is the only adapter: for each artifact, emit a `Copy` for every file under `source_dir` to `output.join(id).join(relpath)`. `plan()` picks `SkillCopy` for every target; `tool` is unused until an adapter diverges.
 
 Frontmatter: split `SKILL.md` on the first `---` / `---` pair and parse the YAML block; missing or malformed frontmatter is fine — `meta` fields just stay `None`. No extra crate unless that proves painful.
 
@@ -135,7 +135,7 @@ Frontmatter: split `SKILL.md` on the first `---` / `---` pair and parse the YAML
 - `src/main.rs` — `atb sync` only
 - `src/lib.rs` — re-export the types and the three functions
 - `src/model.rs` — types above
-- `src/config.rs` — YAML or flag trio → `Config`
+- `src/config.rs` — YAML or `--src`/`--dst` → `Config`
 - `src/discover.rs` — `walkdir` for `SKILL.md`
 - `src/adapter.rs` — `Adapter` + `SkillCopy`
 - `src/apply.rs` — `create_dir_all` + `fs::copy`
@@ -146,6 +146,7 @@ Fixture with two skill dirs (one with a `references/` file). Assert `discover` i
 
 ## TODO (considered, not committed)
 
+- **`--tool`** — all four tools share one copy layout, so the flag only labeled the `Target`. Cut for now; bring back when an adapter diverges. Config YAML still keys targets by `Tool` name.
 - **`--dry-run`** — `sync` overwrites files under `~/.claude` / `~/.agents` with no preview mode, and the flag itself is one `if` before `apply`. Cut for now; needs more thought (interaction with a future `check` / `clean`, what "preview" means once ops aren't all copies).
 - **Discovery/copy filters** — v1 skips nothing; an include/exclude option (globs) would let junk (`.DS_Store`) and private files be excluded.
 - **Apply-behavior flags** — v1 aborts on first failure; a flag could select best-effort-with-summary instead.
