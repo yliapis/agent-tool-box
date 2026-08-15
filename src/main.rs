@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "atb", version, about = "Sync AI agent capabilities across agent harnesses")]
@@ -15,40 +15,45 @@ enum Command {
     Sync(SyncArgs),
 }
 
-/// Exactly one of `--config` or the `--tool --src --dst` trio; see docs/specs/atb-sync.md.
+/// `--src` and `--dst` are required. `--config` is optional and fails when present.
 #[derive(Args)]
-#[command(group(ArgGroup::new("mode").required(true).args(["config", "tool"])))]
 struct SyncArgs {
-    /// Path to a sync.yaml config
-    #[arg(long, conflicts_with_all = ["tool", "src", "dst"])]
+    /// Path to a sync.yaml config (not implemented; exits non-zero)
+    #[arg(long)]
     config: Option<PathBuf>,
 
-    /// Target tool
-    #[arg(long, requires_all = ["src", "dst"])]
-    tool: Option<Tool>,
-
-    /// Source tree searched for SKILL.md
-    #[arg(long, requires = "tool")]
+    /// Source tree searched for artifacts
+    #[arg(long, required_unless_present = "config", requires = "dst")]
     src: Option<PathBuf>,
 
-    /// Output directory for skills
-    #[arg(long, requires = "tool")]
+    /// Output directory
+    #[arg(long, required_unless_present = "config", requires = "src")]
     dst: Option<PathBuf>,
+
+    /// Artifact kind
+    #[arg(long, default_value = "skill")]
+    kind: Kind,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-enum Tool {
-    Claude,
-    Cursor,
-    Codex,
-    Opencode,
+enum Kind {
+    Skill,
+    Command,
+    Agent,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Sync(_) => {
-            anyhow::bail!("`atb sync` is not implemented yet — spec in flight (docs/specs/atb-sync.md)")
+        Command::Sync(args) => {
+            if args.config.is_some() {
+                anyhow::bail!(
+                    "`--config` is not implemented yet — see docs/specs/config-spec.md"
+                );
+            }
+            anyhow::bail!(
+                "`atb sync` is not implemented yet — spec in flight (docs/specs/atb-sync.md)"
+            )
         }
     }
 }

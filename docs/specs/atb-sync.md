@@ -1,6 +1,6 @@
 # `atb sync` — spec
 
-Normative spec for the first cut of `agent-tool-box`: a Rust crate whose public types are the API, and whose only binary entry is `atb sync`. Iterate here; [the plan](../plans/bare-bones-atb-sync.md) tracks sequencing only.
+Normative spec for the first cut of `agent-tool-box`: a Rust crate whose public types are the API, and whose only binary entry is `atb sync`. Iterate here; [the plan](../plans/bare-bones-atb-sync.md) tracks sequencing only. YAML `--config` is a later feature; its design lives in [config-spec.md](config-spec.md).
 
 ## Behavior
 
@@ -12,6 +12,8 @@ atb sync --src ~/src/dotfiles/ai-coding --dst ~/.cursor/skills
 ```
 
 `--config` and the `--src`/`--dst` pair are two ways to build one `Config`, and they are mutually exclusive (a clap `ArgGroup`). `--kind` is legal only with the pair; default `skill`. "Flags override config" sounds simple but is ill-defined the moment a config has two targets — which one does `--dst` override? — so v1 refuses the mix instead of defining merge semantics. `sync` always discover → plan → apply (print the plan, then write).
+
+`--config` is a TODO feature: the flag is optional and exits non-zero when present. YAML schema lives in [config-spec.md](config-spec.md).
 
 ```mermaid
 flowchart LR
@@ -64,21 +66,7 @@ Print each `Copy` as `from -> to`, then write with `create_dir_all` + `fs::copy`
 
 ## Config
 
-One `kind` per `Config` (default `skill`).
-
-```yaml
-kind: skill
-source: ~/src/dotfiles/ai-coding
-targets:
-  cursor:
-    output: ~/.cursor/skills
-  claude:
-    output: ~/.claude/skills
-```
-
-`kind` is optional in YAML and defaults to `skill`. `kinds:` is an unknown field and is an error (`deny_unknown_fields`). No `version`, `defaults`, `kinds`, `merge`. Tilde expansion on `source` and `output`: a manual `~/` prefix swap using `std::env::home_dir()` (un-deprecated since Rust 1.87) — no `shellexpand` dep.
-
-**Validation is strict — every problem is an error**, not a warning: unknown YAML fields (`deny_unknown_fields`), a typo'd target key (anything not a `Tool` variant name), and an empty or missing `targets:`.
+`--config` is a TODO feature. The flag is optional; when present, `atb sync` exits non-zero and writes nothing. Schema, validation, and the YAML → `Config` path are specified in [config-spec.md](config-spec.md).
 
 ## Platform
 
@@ -91,7 +79,7 @@ atb sync --config <path>
 atb sync --src <dir> --dst <dir> [--kind skill|command|agent]
 ```
 
-Exactly one of `--config` or the `--src`/`--dst` pair; both flags are required when `--config` is absent. `--kind` is legal only with the pair (same ArgGroup); default `skill`. Exit non-zero on: mixing `--config` with the pair, missing paths, invalid config, zero matches, duplicate ids, nested `SKILL.md` (Skill only), or a failed copy.
+Exactly one of `--config` or the `--src`/`--dst` pair; both flags are required when `--config` is absent. `--kind` is legal only with the pair (same ArgGroup); default `skill`. Until `--config` lands, the flag is optional and fails when present. Exit non-zero on: `--config` present, mixing `--config` with the pair, missing paths, invalid config, zero matches, duplicate ids, nested `SKILL.md` (Skill only), or a failed copy.
 
 ## Rust API
 
@@ -117,7 +105,7 @@ pub struct ArtifactMeta {
 }
 
 pub struct Target {
-    pub tool: Option<Tool>,      // YAML target key; None on the flag path
+    pub tool: Option<Tool>,      // YAML target key when config lands; None on the flag path
     pub output: PathBuf,         // --dst / targets.<tool>.output
 }
 
@@ -151,22 +139,23 @@ Frontmatter: split the primary file (`source.join("SKILL.md")` for `Skill`, `sou
 
 ## Crate layout
 
-- `Cargo.toml` — deps: `clap` (derive), `serde`, `serde_yaml_ng` (`serde_yaml` is archived; this is the API-compatible fork), `walkdir`, `anyhow`
+- `Cargo.toml` — deps: `clap` (derive), `walkdir`, `anyhow`
 - `src/main.rs` — `atb sync` only
 - `src/lib.rs` — re-export the types and the three functions
 - `src/model.rs` — types above
-- `src/config.rs` — YAML or `--src`/`--dst` [`--kind`] → `Config`
+- `src/config.rs` — `--src`/`--dst` [`--kind`] → `Config` (YAML load is TODO; see [config-spec](config-spec.md))
 - `src/discover.rs` — `walkdir` by kind
 - `src/adapter.rs` — `Adapter` + `CopyAdapter`
 - `src/apply.rs` — `create_dir_all` + `fs::copy`
 
 ## Tests (thin)
 
-Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One command fixture (`commands/critique.md`) that asserts `discover` ids and a plan dest of `{dst}/critique.md`. One config-parse test for the YAML above; one parse test that omitted `kind:` defaults to `skill`. Error-path tests: a src with no matches fails with the marker/search-root hint, duplicate ids fail, nested `SKILL.md` fails (Skill), an unknown config field fails.
+Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One command fixture (`commands/critique.md`) that asserts `discover` ids and a plan dest of `{dst}/critique.md`. Error-path tests: a src with no matches fails with the marker/search-root hint, duplicate ids fail, nested `SKILL.md` fails (Skill), `--config` present fails.
 
 ## TODO (considered, not committed)
 
-- **`--tool`** — all four tools share one copy layout, so the flag only labeled the `Target`. Cut for now; bring back when an adapter diverges. Config YAML still keys targets by `Tool` name.
+- **`--config`** — YAML → `Config` for multi-target sync. Flag is wired and fails when present. Design: [config-spec.md](config-spec.md).
+- **`--tool`** — all four tools share one copy layout, so the flag only labeled the `Target`. Cut for now; bring back when an adapter diverges.
 - **`--dry-run`** — `sync` overwrites files under `~/.claude` / `~/.agents` with no preview mode, and the flag itself is one `if` before `apply`. Cut for now; needs more thought (interaction with a future `check` / `clean`, what "preview" means once ops aren't all copies).
 - **Discovery/copy filters** — v1 skips nothing; an include/exclude option (globs) would let junk (`.DS_Store`) and private files be excluded.
 - **Apply-behavior flags** — v1 aborts on first failure; a flag could select best-effort-with-summary instead.
@@ -187,9 +176,8 @@ Fixture with two skill dirs (one with a `references/` file). Assert `discover` i
 | Fidelity matrix + plan warnings | Every v1 op is a native copy |
 | `Adapter.parse` / `importFrom` | No import command |
 | `Manifest` / `check` / `clean` / `delete` ops | No drift or cleanup command yet |
-| `kinds:` multi-kind routing | One kind per `Config` |
 | `generate` / `check` / `import` / `clean` CLI | One verb: `sync` |
 
 ## Out of scope
 
-Per-tool SKILL.md rewriting, `compatibility:` filtering, region markers, MCP, rules, plugin marketplace sync, multi-kind config, lockfile, flag-over-config merge semantics, deleting stale files from `dst`, Windows, `check` / `import` / `clean`.
+Per-tool SKILL.md rewriting, `compatibility:` filtering, region markers, MCP, rules, plugin marketplace sync, lockfile, flag-over-config merge semantics, deleting stale files from `dst`, Windows, `check` / `import` / `clean`. YAML schema for `--config` is specified separately in [config-spec.md](config-spec.md).
