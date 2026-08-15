@@ -1,10 +1,10 @@
 # `atb sync --config` — spec
 
-YAML schema for `--config`. CLI behavior (mutual exclusion with `--src`/`--dst`, current "flag optional, fails when present" stance) lives in [atb-sync](atb-sync.md).
+YAML schema for `--config`. This surface builds a [Distribution](domain-model.md#distribution). CLI behavior (mutual exclusion with `--src` / `--dst`, current "flag optional, fails when present" stance) lives in [atb-sync](atb-sync.md).
 
 ## Schema
 
-One `kind` per `Config` (default `skill`).
+One `kind` per Distribution (default `skill`).
 
 ```yaml
 kind: skill
@@ -16,9 +16,9 @@ targets:
     output: ~/.claude/skills
 ```
 
-`kind` is optional in YAML and defaults to `skill`. `kinds:` is an unknown field and is an error (`deny_unknown_fields`). No `version`, `defaults`, `kinds`, `merge`. Tilde expansion on `source` and `output`: a manual `~/` prefix swap using `std::env::home_dir()` (un-deprecated since Rust 1.87) — no `shellexpand` dep.
+`kind` is optional in YAML and defaults to `skill`. `kinds:` is an unknown field and is an error (`deny_unknown_fields`). No `version`, `defaults`, `kinds`, `merge`. Tilde expansion on `source` and `output`: a manual `~/` prefix swap using `std::env::home_dir()` (un-deprecated since Rust 1.87). No `shellexpand` dep.
 
-Targets are keyed by `Tool` name (`claude`, `cursor`, `codex`, `opencode`). That is how `Target.tool` gets `Some(...)`; the flag path leaves it `None`.
+YAML `source` becomes `Distribution.root`. Targets are keyed by `Tool` name (`claude`, `cursor`, `codex`, `opencode`). That is how `Target.tool` gets `Some(...)`. The flag path leaves it `None`.
 
 ## Validation
 
@@ -26,12 +26,12 @@ Targets are keyed by `Tool` name (`claude`, `cursor`, `codex`, `opencode`). That
 
 ## Types
 
-`Config`, `Target`, `Tool`, and `Kind` live in [atb-sync](atb-sync.md); their language-agnostic definitions are in the [domain model](domain-model.md). This path only adds YAML → `Config`.
+`Distribution`, `Target`, `Tool`, and `Kind` live in [atb-sync](atb-sync.md). Their language-agnostic definitions are in the [domain model](domain-model.md). This path only adds YAML → `Distribution`.
 
 ## Implementation
 
 - `Cargo.toml` — add `serde`, `serde_yaml_ng` (`serde_yaml` is archived; this is the API-compatible fork)
-- `src/config.rs` — YAML → `Config` (the flags path already builds a `Config`; this adds the file path)
+- `src/config.rs` — YAML → `Distribution` (the flags path already builds a `Distribution`; this adds the file path)
 
 ## Tests
 
@@ -39,5 +39,5 @@ One parse test for the YAML above; one parse test that omitted `kind:` defaults 
 
 ## Out of scope
 
-- `kinds:` multi-kind routing — one kind per `Config`
+- `kinds:` multi-kind routing — one kind per Distribution
 - `version`, `defaults`, `merge`
