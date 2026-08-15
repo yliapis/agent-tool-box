@@ -83,7 +83,7 @@ Exactly one of `--config` or the `--src`/`--dst` pair; both flags are required w
 
 ## Rust API
 
-Single crate, `edition = "2024"`. Package `agent-tool-box`, bin name `atb`. `Result` is `anyhow::Result` throughout — no custom error enum in v1.
+Single crate, `edition = "2024"`. Package `agent-tool-box`, bin name `atb`. `Result` is `anyhow::Result` throughout — no custom error enum in v1. The types below are the Rust binding of the language-agnostic [domain models](models/README.md); their fields, constraints, and relationships are defined there once for every binding.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]

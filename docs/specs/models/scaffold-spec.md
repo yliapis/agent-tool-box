@@ -1,0 +1,59 @@
+# `ScaffoldSpec`
+
+The inputs to create one new artifact skeleton. `scaffold` is the inverse of
+discovery: where sync reads `Artifact`s out of the source tree, scaffold writes
+one in, laid out so a subsequent sync discovers it. This file defines the input
+record; the templates, layout, and validation *rules* live in
+[atb-scaffold](../atb-scaffold.md).
+
+## `ScaffoldSpec`
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | [`Kind`](enumerations.md#kind) | no | Which skeleton to create. `default: Skill`. |
+| `tool` | [`Tool`](enumerations.md#tool) | no | Template flavor. `default: Claude` — the only flavor with templates in v1. |
+| `name` | `Text` | yes | The artifact's stem; the `id` it will discover as. Constrained — see [name](#name). |
+| `description` | `Text?` | no | Fills the generated frontmatter's `description:`. Empty → a per-kind placeholder is written instead. |
+| `dir` | `Path` | no | The base directory the skeleton is created under. `default: .`; must already exist. |
+
+### `name`
+
+`name` is the tightest-constrained field in any model here because it becomes a
+directory name, a filename, and a YAML scalar all at once:
+
+- Pattern `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$` — lowercase alphanumerics and
+  internal hyphens; no leading, trailing, or doubled edge hyphen.
+- At most 64 characters.
+
+This is the strictest of the four harnesses' naming rules, so a name that
+passes is legal on every tool, filesystem-safe, and needs no YAML quoting. It is
+the **stem only**: scaffold appends `.md` itself for command and agent kinds, so
+a `name` like `critique.md` is invalid (it fails the pattern), not redundant.
+
+### Kind → what gets created
+
+`name` + `kind` + `dir` determine the single file written and the `id` it will
+discover as — the round-trip back to [`Artifact`](artifact.md#artifact):
+
+| `kind` | Creates | Discovered `id` |
+|---|---|---|
+| `Skill` | `{dir}/skills/{name}/SKILL.md` | `{name}` |
+| `Command` | `{dir}/commands/{name}.md` | `{name}.md` |
+| `Agent` | `{dir}/agents/{name}.md` | `{name}.md` |
+
+`tool` selects the template flavor for that file. In v1 only `Claude` has a
+template set; the other three `Tool` variants are accepted as values but have no
+templates yet, so using them is an error rather than a silent Claude-flavored
+write.
+
+**Relationship to sync's models.** `ScaffoldSpec` adds no new field types — it
+reuses [`Kind`](enumerations.md#kind) and [`Tool`](enumerations.md#tool) and
+produces output shaped so discovery reads it back as an `Artifact` whose
+[`ArtifactMeta`](artifact.md#artifactmeta) is populated. Scaffold does not
+introduce a [`FileOp`](sync-plan.md#fileop) variant: it writes one file directly
+rather than emitting a plan.
+
+**Where used**
+
+- **scaffold** — the sole input to the `scaffold` operation, which validates it,
+  renders the template, and writes the file.

@@ -26,7 +26,7 @@ Targets are keyed by `Tool` name (`claude`, `cursor`, `codex`, `opencode`). That
 
 ## Types
 
-`Config`, `Target`, `Tool`, and `Kind` live in [atb-sync](atb-sync.md). This path only adds YAML → `Config`.
+`Config`, `Target`, `Tool`, and `Kind` live in [atb-sync](atb-sync.md); their language-agnostic definitions are in the [domain models](models/README.md) ([config](models/config.md), [enumerations](models/enumerations.md)). This path only adds YAML → `Config`.
 
 ## Implementation
 

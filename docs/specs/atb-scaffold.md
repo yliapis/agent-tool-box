@@ -85,6 +85,8 @@ atb scaffold --name <name> [--kind skill|command|agent] [--tool claude|cursor|co
 
 ## Rust API
 
+`ScaffoldSpec` is the Rust binding of the [`ScaffoldSpec` domain model](models/scaffold-spec.md); `Kind` and `Tool` are sync's enums, defined language-agnostically in [enumerations](models/enumerations.md).
+
 ```rust
 pub struct ScaffoldSpec {
     pub kind: Kind,                  // default Skill
