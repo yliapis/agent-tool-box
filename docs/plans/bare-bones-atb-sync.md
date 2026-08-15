@@ -1,6 +1,27 @@
 # Bare-bones `atb sync`
 
-Repo is empty except [README.md](../../README.md). First cut is a Rust crate whose public types are the API, and whose only binary entry is `atb sync`.
+Repo is docs-only today. First cut is a Rust crate whose public types are the API, and whose only binary entry is `atb sync`. Work is split so the spec can be iterated before any feature code exists.
+
+## Deliverables (in order)
+
+1. **Spec, not code** — write `docs/specs/atb-sync.md`. Everything below the divider is its seed: it moves there, gets iterated in place, and is cut from this plan once the spec lands. From then on the spec is the source of truth; this plan tracks sequencing and open questions only.
+2. **Scaffold, no logic** — `cargo init`: package `agent-tool-box`, bin `atb`, edition 2024, deps and file layout from the crate-layout section, modules stubbed. `atb sync` parses the full flag surface (`ArgGroup` mutual exclusion included) and exits non-zero with a "spec in flight" message. `cargo build` / `clippy` / `test` stay green.
+
+No `discover` / `plan` / `apply` code until spec iteration settles.
+
+## Open questions (settle during spec iteration)
+
+- `--dry-run`: still cut, but `sync` overwrites files under `~/.claude` / `~/.agents` with no preview mode, and the flag is one `if` before `apply`. Keep the cut or take it back?
+- Symlinks inside a skill dir: does discovery follow them, and does copy materialize them (`fs::copy` follows links) or refuse?
+- Junk files inside a skill dir (`.DS_Store`, other dotfiles): copied as-is today — skip instead? Discovery skips hidden *dirs* only.
+- Nested `SKILL.md` beneath an already-matched skill dir: descend (two artifacts) or stop at the first match?
+- `apply` failure mid-plan: abort on first failed copy or best-effort with a summary? Already-written files stay either way.
+- Config validation: empty `targets:`, typo'd target key, unknown YAML fields (`deny_unknown_fields`?) — error or ignore?
+- Platform: tilde swap and paths assume Unix; state explicitly whether Windows is unsupported in v1.
+
+---
+
+Everything below is spec seed — destined for `docs/specs/atb-sync.md`, kept here only until that file exists.
 
 ## What the first cut does
 
