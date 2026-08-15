@@ -13,13 +13,9 @@ or more `Target`s.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `kind` | [`Kind`](enumerations.md#kind) | no | The one category this job syncs. `default: Skill`. |
+| `kind` | [`Kind`](enumerations.md#kind) | yes | The one category this job syncs. Every constructed `Config` carries one; both input surfaces default an omitted kind to `skill` ([CLI](../atb-sync.md#cli), [YAML](../config-spec.md#schema)). |
 | `source` | `Path` | yes | Root of the tree discovery walks. |
-| `targets` | `List<`[`Target`](#target)`>` | yes | Where to write; **non-empty** — a config with no targets is an error. |
-
-**One `Kind` per `Config`.** A job syncs exactly one category. Syncing skills
-and commands is two jobs, not one config with a `kinds:` list — multi-kind
-routing is explicitly out of scope (see [config-spec](../config-spec.md#out-of-scope)).
+| `targets` | `List<`[`Target`](#target)`>` | yes | Where to write. **Non-empty** — see [Invariants](#invariants). |
 
 **Two ways to build one.** The flag path (`--src` / `--dst` / `--kind`) yields a
 `Config` with a single `Target` whose `tool` is empty. The YAML path yields a
@@ -34,14 +30,29 @@ to.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `tool` | [`Tool`](enumerations.md#tool)`?` | no | The harness this destination is for. Set from the YAML `targets.<tool>` key; empty on the flag path. |
+| `tool` | [`Tool`](enumerations.md#tool)`?` | no | The harness this destination is for. Constrained per-`Config` — see [Invariants](#invariants). |
 | `output` | `Path` | yes | Directory artifacts are written under. From `--dst`, or `targets.<tool>.output`. |
 
-`tool` being optional is the seam between the two input paths: the flag path has
-no place to name a tool, so it leaves `tool` empty; the YAML path always names
-one via the map key. In v1 the label is not read by the copy (all tools share
-one layout) — it is retained so a future per-tool adapter can branch on it, and
-so a plan can report which destination it targets.
+In v1 the `tool` label is not read by the copy (all tools share one layout) —
+it is retained so a future per-tool adapter can branch on it, and so a plan can
+report which destination it targets.
+
+## Invariants
+
+- **`targets` is non-empty.** A config with no targets is an error
+  ([config-spec](../config-spec.md#validation)).
+- **One `Kind` per `Config`.** A job syncs exactly one category. Syncing
+  skills and commands is two jobs, not one config with a `kinds:` list —
+  multi-kind routing is explicitly out of scope
+  ([config-spec](../config-spec.md#out-of-scope)).
+- **`tool` labeling is coherent.** Within one `Config`, exactly two
+  configurations occur: **every** target carries a `tool` (the YAML path —
+  each `targets.<tool>` key labels its entry), or `targets` is a **single**
+  element whose `tool` is empty (the flag path — the flags have no place to
+  name a tool). A mixed list, or a multi-target list with unlabeled entries,
+  is never constructed and has no defined meaning. This is the reason `tool`
+  is optional at all: the optionality encodes the flag path's missing label,
+  not a per-target free choice.
 
 **Where used**
 

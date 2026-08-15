@@ -10,11 +10,11 @@ nothing on disk; applying them is a separate step.
 
 | Variant | Fields | Meaning |
 |---|---|---|
-| `Copy` | `from: Path`, `to: Path` | Copy the file at `from` to `to`, creating parent directories and overwriting an existing file. Symlinks are materialized — the link's target content is written, not the link. |
+| `Copy` | `from: Path`, `to: Path` | **Postcondition:** after apply, `to` exists holding the content `from` resolves to (a symlinked `from` is materialized — the target's content is written, not the link). *How* apply achieves this — parent-directory creation, overwriting — is behavior: [atb-sync](../atb-sync.md#apply). |
 
 `FileOp` is a union so the vocabulary can grow (a delete for a future `clean`, a
 region write for merge-style targets) without changing `SyncPlan`. In v1 every
-op is a native `Copy`; no other variant exists, and nothing is ever deleted.
+op is a `Copy`; no other variant exists, and nothing is ever deleted.
 
 ## `SyncPlan`
 
@@ -22,19 +22,30 @@ The `FileOp`s computed for one [`Target`](config.md#target).
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `target` | [`Target`](config.md#target) | yes | The destination this plan writes to. |
-| `ops` | `List<`[`FileOp`](#fileop)`>` | yes | The operations to perform, in order. May be empty if nothing was discovered. |
+| `target` | [`Target`](config.md#target) | yes | The destination this plan writes to — the config's own `Target`, referenced, not owned. See [Invariants](#invariants). |
+| `ops` | `List<`[`FileOp`](#fileop)`>` | yes | The operations to perform, in order. |
 
-**Cardinality.** One `SyncPlan` per `Target`: planning a `Config` with N targets
-yields N plans. The op count depends on `Kind` — a `Skill` expands to one `Copy`
-per file under the skill directory (`{output}/{id}/{relpath}`), while a
-`Command` or `Agent` is a single `Copy` to `{output}/{id}`.
+## Invariants
+
+- **A plan is a derived relation.** Planning a `Config` yields exactly one
+  `SyncPlan` per target, in order: `plans[i].target` *is* `config.targets[i]` —
+  the same value, not an independent entity. The class diagram draws this as a
+  reference rather than a composition for that reason.
+- **`ops` ordering is meaningful.** Apply executes `ops` in order and stops at
+  the first failure. The ordering *behavior* lives in
+  [atb-sync](../atb-sync.md#apply); the order itself is data.
+- **`ops` is non-empty in v1.** Discovery errors on zero matches, and every
+  artifact expands to at least one op under the
+  [`KindLayout` copy shape](kind-layout.md#the-mapping) (a skill directory
+  contains at least its `SKILL.md`), so a constructed plan always has work. The
+  type still permits empty so a future filtered discovery doesn't change the
+  shape.
 
 **Plan then apply.** A plan is computed and printed (each `Copy` as
-`from -> to`) before any write happens, so the printed plan and the writes cannot
-diverge. Apply walks `ops` in order and stops at the first failure; files already
-written stay. This ordering behavior lives in [atb-sync](../atb-sync.md#apply) —
-the model here is just the data those steps pass around.
+`from -> to`) before any write happens, so the printed plan and the writes
+cannot diverge. The op count per artifact is the
+[`KindLayout` copy shape](kind-layout.md#the-mapping): one `Copy` per file under
+a skill directory, a single `Copy` for a command or agent.
 
 **Where used**
 

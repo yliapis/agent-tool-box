@@ -9,17 +9,16 @@ atb scaffold --name code-review
 atb scaffold --kind command --name critique --dir ~/src/dotfiles/ai-coding/plugins/core
 ```
 
-The first writes `./skills/code-review/SKILL.md`; the second writes `…/plugins/core/commands/critique.md`, which the next `atb sync` picks up. **Round-trip invariant**: immediately after a successful scaffold, `discover(dir, kind)` succeeds and includes exactly the new artifact (id `{name}` for skills, `{name}.md` for commands and agents), with `meta.name` / `meta.description` populated from the generated frontmatter.
+The first writes `./skills/code-review/SKILL.md`; the second writes `…/plugins/core/commands/critique.md`, which the next `atb sync` picks up. **Round-trip invariant**: immediately after a successful scaffold, `discover(dir, kind)` succeeds and includes exactly the new artifact, with the `id` and `meta` fields the [round-trip law](models/README.md#the-round-trip-law) states — that statement is canonical, including its collision proviso and the fact that the command template writes no `name:` frontmatter (so a command's `meta.name` stays `None`).
 
 Scaffold never overwrites: an existing destination is an error and nothing is written. `--tool` (default `claude`) selects the template flavor; v1 ships claude templates only, and any other value exits non-zero (see [`--tool`](#--tool)).
 
 ## Layout and templates
 
-| `Kind` | Creates | Discovered id |
-|---|---|---|
-| `Skill` | `{dir}/skills/{name}/SKILL.md` | `{name}` |
-| `Command` | `{dir}/commands/{name}.md` | `{name}.md` |
-| `Agent` | `{dir}/agents/{name}.md` | `{name}.md` |
+The path each `kind` creates, and the `id` it discovers as, are the
+scaffold-path and id-from-`name` rows of the
+[`KindLayout` mapping](models/kind-layout.md#the-mapping); the templates below
+are the content written at those paths.
 
 Intermediate directories (`skills/`, the skill dir, `commands/`, `agents/`) are created with `create_dir_all`; `{dir}` itself must already exist — a missing `--dir` is more likely a typo than intent.
 
@@ -59,7 +58,7 @@ description: "TODO: when to delegate to this agent."
 TODO: the system prompt. Describe how this agent works, not when to pick it — `description` above does that.
 ```
 
-The frontmatter must parse under sync's frontmatter reader (first `---` / `---` pair, YAML): a freshly scaffolded artifact never discovers with `meta` fields `None`.
+The frontmatter must parse under sync's frontmatter reader (first `---` / `---` pair, YAML): the fields a template writes never discover as `None`. (The command template writes only `description:`, so a command's `meta.name` is `None` by design, not by parse failure.)
 
 ## Validation
 
@@ -85,15 +84,15 @@ atb scaffold --name <name> [--kind skill|command|agent] [--tool claude|cursor|co
 
 ## Rust API
 
-`ScaffoldSpec` is the Rust binding of the [`ScaffoldSpec` domain model](models/scaffold-spec.md); `Kind` and `Tool` are sync's enums, defined language-agnostically in [enumerations](models/enumerations.md).
+`ScaffoldSpec` is the Rust binding of the [`ScaffoldSpec` domain model](models/scaffold-spec.md); `Kind` and `Tool` are sync's enums, defined language-agnostically in [enumerations](models/enumerations.md). The block is deliberately comment-free — field semantics live in the models (see [normativity](models/README.md#normativity)); defaults are the [CLI](#cli)'s.
 
 ```rust
 pub struct ScaffoldSpec {
-    pub kind: Kind,                  // default Skill
-    pub tool: Tool,                  // default Claude; only Claude has templates in v1
+    pub kind: Kind,
+    pub tool: Tool,
     pub name: String,
-    pub description: Option<String>, // None → per-kind TODO placeholder
-    pub dir: PathBuf,                // must exist; default "."
+    pub description: Option<String>,
+    pub dir: PathBuf,
 }
 
 pub fn scaffold(spec: &ScaffoldSpec) -> Result<Vec<PathBuf>>;

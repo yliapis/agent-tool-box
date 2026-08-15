@@ -46,21 +46,19 @@ emits.
 | `Command` | `command` | A single-file slash command. |
 | `Agent` | `agent` | A single-file agent definition. |
 
-**Default:** `Skill`. The `--kind` flag, the YAML `kind:` field, and
-`ScaffoldSpec.kind` all default to `Skill` when omitted.
+Every input surface that selects a `Kind` — sync's `--kind` flag, the YAML
+`kind:` field, scaffold's `--kind` — defaults an omitted value to `skill`. Each
+surface spec owns its default ([sync CLI](../atb-sync.md#cli),
+[YAML schema](../config-spec.md#schema),
+[scaffold CLI](../atb-scaffold.md#cli)); the models carry no defaults.
 
-### Per-kind shape (reference)
+### Per-kind layout
 
-`Kind` determines the marker discovery looks for and how an
-[`Artifact`](artifact.md#artifact)'s identity is derived. This table is the
-data-level summary; the full discovery walk and copy rules live in
-[atb-sync](../atb-sync.md#discovery).
-
-| `Kind` | Source marker | `id` | `source` points at |
-|---|---|---|---|
-| `Skill` | `**/skills/*/SKILL.md` | the skill directory name (e.g. `foo`) | the skill directory |
-| `Command` | `**/commands/*.md` (direct children) | the filename (e.g. `critique.md`) | the file |
-| `Agent` | `**/agents/*.md` (direct children) | the filename | the file |
+`Kind` determines the discovery marker, how an
+[`Artifact`](artifact.md#artifact)'s `id` and `source` are derived, the copy
+shape, and the scaffold path — one rule per variant, defined once as the
+[`KindLayout` mapping](kind-layout.md#the-mapping). The full discovery walk and
+copy behavior live in [atb-sync](../atb-sync.md#discovery).
 
 **Where used**
 
