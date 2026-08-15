@@ -51,8 +51,9 @@ Print each `Copy` as `from -> to`, then write with `create_dir_all` + `fs::copy`
 
 ## Config
 
+# TODO: UPDATE THIS MORE CAREFULLY
 ```yaml
-source: /Users/yliapis/src/dotfiles/ai-coding
+source: /Users/yliapis/src/dotfiles/ai-coding/skills
 targets:
   cursor:
     output: ~/.agents/skills
