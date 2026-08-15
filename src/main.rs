@@ -64,7 +64,7 @@ fn sync(args: SyncArgs) -> anyhow::Result<()> {
     let dst = args.dst.context("missing --dst")?;
     let dist = config::from_flags(src, dst, to_kind(args.kind));
     let catalog = discover(&dist.root, dist.kind)?;
-    let plans = plan(&catalog, &dist.targets);
+    let plans = plan(&catalog, &dist.targets)?;
     apply(&plans)
 }
 

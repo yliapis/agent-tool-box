@@ -243,7 +243,7 @@ How each [`Kind`](#kind) meets the filesystem. This is a **static rule**, not a 
 
 The two `id` rows agree by construction. Scaffold of `name` at the scaffold path, then discover, yields the `id` the name row predicts. That agreement is the mechanical core of the [round-trip law](#the-round-trip-law).
 
-Behavior around the convention belongs to the verb specs: symlink following, the nested-`SKILL.md` error, a file at `commands/foo/bar.md`, how a skill or plugin directory is copied ([discovery](atb-sync.md#discovery), [copy semantics](atb-sync.md#copy-semantics), [templates](atb-scaffold.md#layout-and-templates)).
+Behavior around the convention belongs to the verb specs: symlink following, walk-error classification, the nested-`SKILL.md` error, a file at `commands/foo/bar.md`, how a skill or plugin directory is copied ([discovery](atb-sync.md#discovery), [copy semantics](atb-sync.md#copy-semantics), [templates](atb-scaffold.md#layout-and-templates)).
 
 ## The round-trip law
 

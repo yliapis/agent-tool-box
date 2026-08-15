@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -8,7 +9,7 @@ use walkdir::WalkDir;
 use crate::model::{Artifact, ArtifactMeta, Catalog, Kind};
 
 pub fn discover(root: &Path, kind: Kind) -> Result<Catalog> {
-    let files = walk_files(root)?;
+    let files = walk_files(root, WalkMode::Search)?;
     let mut artifacts = match kind {
         Kind::Skill => discover_skills(&files)?,
         Kind::Command => discover_files(kind, &files, "commands"),
@@ -33,15 +34,45 @@ pub fn discover(root: &Path, kind: Kind) -> Result<Catalog> {
     })
 }
 
-fn walk_files(root: &Path) -> Result<Vec<PathBuf>> {
+#[derive(Clone, Copy)]
+pub(crate) enum WalkMode {
+    Search,
+    Expand,
+}
+
+pub(crate) fn walk_files(root: &Path, mode: WalkMode) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in WalkDir::new(root).follow_links(true) {
-        let entry = entry.with_context(|| format!("walk {}", root.display()))?;
-        if entry.file_type().is_file() {
-            files.push(entry.into_path());
+        match entry {
+            Ok(entry) => {
+                if entry.file_type().is_file() {
+                    files.push(entry.into_path());
+                }
+            }
+            Err(err) => handle_walk_error(root, mode, err)?,
         }
     }
     Ok(files)
+}
+
+fn handle_walk_error(root: &Path, mode: WalkMode, err: walkdir::Error) -> Result<()> {
+    if err.loop_ancestor().is_some() {
+        return Err(err).with_context(|| format!("walk {}", root.display()));
+    }
+
+    let on_root = err.path().is_none_or(|path| path == root);
+    let kind = err.io_error().map(io::Error::kind);
+    let skip_not_found = kind == Some(io::ErrorKind::NotFound);
+    let skip_denied = kind == Some(io::ErrorKind::PermissionDenied);
+
+    let skip = !on_root && (skip_not_found || (skip_denied && matches!(mode, WalkMode::Search)));
+    if skip {
+        let path = err.path().unwrap_or(root);
+        eprintln!("skip {}: {err}", path.display());
+        return Ok(());
+    }
+
+    Err(err).with_context(|| format!("walk {}", root.display()))
 }
 
 fn discover_skills(files: &[PathBuf]) -> Result<Vec<Artifact>> {

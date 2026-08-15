@@ -40,8 +40,12 @@ What each `Kind` matches, and the `id` / `source` it yields, are the marker, ref
 
 A file at `commands/foo/bar.md` is not a command. Discovery does not report an error. Discovery does not copy that file.
 
-- **Symlinks are followed** (`walkdir` with `follow_links(true)`). Built-in loop detection turns cycles into errors.
+- **Symlinks are followed** (`walkdir` with `follow_links(true)`).
 - **Nothing is skipped.** Hidden files and directories are walked like everything else. Filtering is a later option (see TODO).
+- **Walk errors** on the search of `root` are classified. They are not catalog errors and they are not a filter.
+  - error on `root` — exit non-zero, nothing written
+  - `NotFound` or `PermissionDenied` on any other path — skip the entry, write a `skip` line to stderr with the path and the error, continue the walk
+  - symlink cycle or any other IO error — exit non-zero, nothing written
 - Discovery errors (exit non-zero, nothing written), keyed by kind:
   - zero matches — the message names the marker and the search-root hint (`ai-coding` or `ai-coding/plugins`, not `ai-coding/skills`)
   - duplicate `id` in the Catalog (same name under two plugins) — both land at the same dest path, and last-write-wins hides the collision
@@ -50,6 +54,14 @@ A file at `commands/foo/bar.md` is not a command. Discovery does not report an e
 ## Copy semantics
 
 `CopyAdapter` expands each artifact by [`Kind`](domain-model.md#kind). Every file under a skill `source` goes to `{output}/{id}/{relpath}` (same as today, including junk like `.DS_Store`). Filters are TODO. A command or agent is one `Copy`.
+
+Skill expansion walks `source` with the same follow-links rule. Walk errors on this walk are classified. The fatal set is stricter than the search walk: a denied directory under `source` makes the file list incomplete.
+
+- error on `source` — do not return a plan, exit non-zero, nothing written
+- `NotFound` on any other path — skip the entry, write a `skip` line to stderr with the path and the error, do not emit a `Copy` for it
+- `PermissionDenied`, a symlink cycle, or any other IO error — do not return a plan, exit non-zero, nothing written
+
+A dangling symlink is not a file. It is not a `Copy`.
 
 Symlinked files are materialized: `fs::copy` follows the link and writes the target content. Overwrite existing files. Never delete. Stale files in `dst` are the future `clean` problem.
 
@@ -74,7 +86,7 @@ atb sync --config <path>
 atb sync --src <dir> --dst <dir> [--kind skill|command|agent]
 ```
 
-Exactly one of `--config` or the `--src` / `--dst` pair. When `--config` is absent, both flags are required. `--kind` is legal only with the pair (same ArgGroup). Default `skill`. Until `--config` lands, the flag is optional. If the flag is present, the command fails. Exit non-zero on: `--config` present, mixing `--config` with the pair, missing paths, invalid config, zero matches, duplicate ids, nested `SKILL.md` (Skill only), or a failed copy.
+Exactly one of `--config` or the `--src` / `--dst` pair. When `--config` is absent, both flags are required. `--kind` is legal only with the pair (same ArgGroup). Default `skill`. Until `--config` lands, the flag is optional. If the flag is present, the command fails. Exit non-zero on: `--config` present, mixing `--config` with the pair, missing paths, invalid config, a fatal walk error, zero matches, duplicate ids, nested `SKILL.md` (Skill only), a failed skill expansion, or a failed copy.
 
 ## Rust API
 
@@ -126,15 +138,15 @@ pub struct SyncPlan {
 }
 
 pub trait Adapter {
-    fn plan(&self, artifacts: &[Artifact], target: &Target) -> Vec<FileOp>;
+    fn plan(&self, artifacts: &[Artifact], target: &Target) -> Result<Vec<FileOp>>;
 }
 
 pub fn discover(root: &Path, kind: Kind) -> Result<Catalog>;
-pub fn plan(catalog: &Catalog, targets: &[Target]) -> Vec<SyncPlan>;
+pub fn plan(catalog: &Catalog, targets: &[Target]) -> Result<Vec<SyncPlan>>;
 pub fn apply(plans: &[SyncPlan]) -> Result<()>;
 ```
 
-`CopyAdapter` is the only adapter. It emits the ops for each artifact (see [Copy semantics](#copy-semantics)). `plan()` picks `CopyAdapter` for every target. `tool` is unused until an adapter diverges.
+`CopyAdapter` is the only adapter. It emits the ops for each artifact (see [Copy semantics](#copy-semantics)). `plan()` picks `CopyAdapter` for every target. A failed expansion is `Err`. `tool` is unused until an adapter diverges.
 
 Frontmatter: split the primary file (`source.join("SKILL.md")` for `Skill`, `source` itself for Command/Agent) on the first `---` / `---` pair and parse the YAML block. Missing or malformed frontmatter is fine. `meta` fields stay `None`. No extra crate unless that proves painful.
 
@@ -145,21 +157,21 @@ Frontmatter: split the primary file (`source.join("SKILL.md")` for `Skill`, `sou
 - `src/lib.rs` — re-export the types and the three functions
 - `src/model.rs` — types above
 - `src/config.rs` — `--src` / `--dst` [`--kind`] → `Distribution` (YAML load is TODO; see [config-spec](config-spec.md))
-- `src/discover.rs` — `walkdir` by kind
-- `src/adapter.rs` — `Adapter` + `CopyAdapter`
+- `src/discover.rs` — `walkdir` by kind, walk-error classification
+- `src/adapter.rs` — `Adapter` + `CopyAdapter` (skill expansion uses the same classifier)
 - `src/apply.rs` — `create_dir_all` + `fs::copy`
 
 ## Tests (thin)
 
-Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One command fixture (`commands/critique.md`) that asserts `discover` ids and a plan dest of `{dst}/critique.md`. Error-path tests: a root with no matches fails with the marker/search-root hint, duplicate ids fail, nested `SKILL.md` fails (Skill), `--config` present fails.
+Fixture with two skill dirs (one with a `references/` file). Assert `discover` ids, assert plan destinations are `{dst}/{id}/SKILL.md`, assert `apply` writes both files. One command fixture (`commands/critique.md`) that asserts `discover` ids and a plan dest of `{dst}/critique.md`. Error-path tests: a root with no matches fails with the marker/search-root hint, duplicate ids fail, nested `SKILL.md` fails (Skill), `--config` present fails. Walk-error tests: a dangling symlink next to a skill is skipped and discover succeeds; `PermissionDenied` on a sibling of a skill is skipped and discover succeeds; the same errors on `root` fail; a symlink cycle fails; a dangling symlink inside a skill is omitted from the plan; `PermissionDenied` under a skill `source` fails the plan.
 
 ## TODO (considered, not committed)
 
 - **`--config`** — YAML → `Distribution` for multi-target sync. Flag is wired and fails when present. Design: [config-spec.md](config-spec.md).
 - **`--tool`** — all four Tools share one copy layout, so the flag only labeled the `Target`. Cut for now; bring back when an adapter diverges.
 - **`--dry-run`** — `sync` overwrites files under `~/.claude` / `~/.agents` with no preview mode, and the flag itself is one `if` before `apply`. Cut for now; needs more thought (interaction with a future `check` / `clean`, what "preview" means once ops aren't all copies).
-- **Discovery/copy filters** — v1 skips nothing. An include/exclude option (globs) can exclude junk (`.DS_Store`) and private files.
-- **Apply-behavior flags** — v1 aborts on first failure. A later flag can select best-effort-with-summary instead.
+- **Discovery/copy filters** — v1 has no include/exclude filter. Hidden files are walked. Walk-error skips are not a filter. An include/exclude option (globs) can exclude junk (`.DS_Store`) and private files.
+- **Apply-behavior flags** — v1 aborts on first failure. A later flag can select best-effort-with-summary instead. Walk-error classification is a separate rule.
 - **Nested skills** — nested `SKILL.md` is an error today. Take a further look at whether it is legal, and what `id`/layout it maps to.
 - **MarketplaceCopy** — Cursor `plugins/local/…` vs Claude `plugins/marketplaces/…` vs OpenCode none. Hooks stay off `Kind` (Claude-only dest, source is `ai-coding/hooks/`, not a plugin flatten).
 
