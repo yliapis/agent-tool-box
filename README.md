@@ -9,7 +9,7 @@ cli for syncing AI agent capabilities across agent harnesses
 
 **Rules**: [rules]()  // TODO
 
-**AGENTS.md**: [agents-dot-md]()  // TODO
+**AGENTS.md**: [agents-dot-md](https://agents.md/)
 
 **MCP**: [mcp](https://modelcontextprotocol.io/specification)
 
